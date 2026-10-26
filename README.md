@@ -5,7 +5,7 @@ Sharemouse 是一款局域网键鼠共享工具，可让 Windows 11 和 Apple �
 > [!WARNING]
 > 当前为实验版本，跨平台实机兼容性仍在验证中，请勿用于重要工作环境。
 
-<!-- 截图：设备页（连接设备、附近的主设备、屏幕布局），放在 docs/images/devices.png -->
+![设备页：连接设备、附近的主设备和共享状态](docs/images/devices.png)
 
 ## 功能
 
@@ -18,7 +18,9 @@ Sharemouse 是一款局域网键鼠共享工具，可让 Windows 11 和 Apple �
 - **常驻后台**：关闭窗口后最小化到托盘或菜单栏，可设置登录时自动启动。
 - **中英文界面**，支持浅色和深色主题。
 
-<!-- 截图：消息页、文件页，放在 docs/images/messages.png、docs/images/files.png -->
+| 消息 | 设备与布局 |
+| --- | --- |
+| ![消息页](docs/images/messages.png) | ![设备连接与屏幕布局](docs/images/layout.png) |
 
 ## 系统要求
 
@@ -48,8 +50,6 @@ Sharemouse 是一款局域网键鼠共享工具，可让 Windows 11 和 Apple �
 3. 两台电脑都会弹出指纹确认，核对一致后点击“确认加入”。
 4. 在屏幕布局中拖动设备，摆放成和实际位置一致。
 5. 在实际连着键盘鼠标的电脑上点击“使用本机”，开始共享。
-
-<!-- 截图：附近的主设备列表、指纹确认弹窗，放在 docs/images/nearby.png、docs/images/confirm.png -->
 
 ## 网络与防火墙
 
