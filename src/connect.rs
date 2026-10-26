@@ -1,0 +1,397 @@
+use crate::client::ClientManager;
+use crate::config::local_commit;
+use lan_mouse_ipc::{ClientHandle, DEFAULT_PORT};
+use lan_mouse_proto::{MAX_EVENT_SIZE, ProtoEvent};
+use local_channel::mpsc::{Receiver, Sender, channel};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    io,
+    net::SocketAddr,
+    rc::Rc,
+    sync::Arc,
+    time::Duration,
+};
+use thiserror::Error;
+use tokio::{
+    net::UdpSocket,
+    sync::Mutex,
+    task::{JoinSet, spawn_local},
+};
+use webrtc_dtls::{
+    config::{Config, ExtendedMasterSecretType},
+    conn::DTLSConn,
+    crypto::Certificate,
+};
+use webrtc_util::Conn;
+
+#[derive(Debug, Error)]
+pub(crate) enum LanMouseConnectionError {
+    #[error(transparent)]
+    Bind(#[from] io::Error),
+    #[error(transparent)]
+    Dtls(#[from] webrtc_dtls::Error),
+    #[error(transparent)]
+    Webrtc(#[from] webrtc_util::Error),
+    #[error("not connected")]
+    NotConnected,
+    #[error("emulation is disabled on the target device")]
+    TargetEmulationDisabled,
+    #[error("Connection timed out")]
+    Timeout,
+}
+
+const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Local mirror of the callback type that `webrtc-dtls` expects for
+/// peer certificate verification.
+type PeerCertificateVerifier = Arc<
+    dyn (Fn(
+            &[Vec<u8>],
+            &[rustls::pki_types::CertificateDer<'static>],
+        ) -> Result<(), webrtc_dtls::Error>)
+        + Send
+        + Sync,
+>;
+
+async fn connect(
+    addr: SocketAddr,
+    cert: Certificate,
+    allowed: lan_mouse_data::AuthorizedFingerprints,
+) -> Result<Connected, (SocketAddr, LanMouseConnectionError)> {
+    log::info!("connecting to {addr} ...");
+    let conn = Arc::new(
+        UdpSocket::bind("0.0.0.0:0")
+            .await
+            .map_err(|e| (addr, e.into()))?,
+    );
+    conn.connect(addr).await.map_err(|e| (addr, e.into()))?;
+    // The verifier runs inside the handshake, so the fingerprint it
+    // accepted is the one the peer actually proved. Recording it here
+    // is what lets the frontend address the device on the data channel
+    // later; without it the GUI only has a display hostname.
+    // `std::sync::Mutex`: the verifier runs synchronously inside the
+    // handshake, so a tokio mutex could never be awaited there.
+    let verified = Arc::new(std::sync::Mutex::new(None::<String>));
+    let verified_slot = verified.clone();
+    // lan-mouse certificates are self-signed and authorized by
+    // fingerprint, so public WebPKI chain validation cannot apply. The
+    // callback below still pins the server to the authorized set, which
+    // rejects an unauthorized party on the configured address.
+    let verify_peer_certificate: PeerCertificateVerifier = Arc::new(
+        move |certs: &[Vec<u8>], _chains: &[rustls::pki_types::CertificateDer<'static>]| {
+            let fingerprint = certs
+                .first()
+                .map(|cert| crate::crypto::generate_fingerprint(cert))
+                .unwrap_or_default();
+            if allowed.read().expect("lock").contains(&fingerprint) {
+                *verified_slot.lock().expect("lock") = Some(fingerprint);
+                Ok(())
+            } else {
+                log::warn!("refusing unauthenticated input peer {addr} ({fingerprint})");
+                Err(webrtc_dtls::Error::ErrVerifyDataMismatch)
+            }
+        },
+    );
+    let config = Config {
+        certificates: vec![cert],
+        server_name: "ignored".to_owned(),
+        insecure_skip_verify: true,
+        verify_peer_certificate: Some(verify_peer_certificate),
+        extended_master_secret: ExtendedMasterSecretType::Require,
+        ..Default::default()
+    };
+    let timeout = tokio::time::sleep(DEFAULT_CONNECTION_TIMEOUT);
+    tokio::select! {
+        _ = timeout => Err((addr, LanMouseConnectionError::Timeout)),
+        result = DTLSConn::new(conn, config, true, None) => match result {
+            Ok(dtls_conn) => {
+                let fingerprint = verified.lock().expect("lock").clone();
+                Ok(Connected {
+                    conn: Arc::new(dtls_conn),
+                    addr,
+                    fingerprint,
+                })
+            }
+            Err(e) => Err((addr, e.into())),
+        }
+    }
+}
+
+/// A verified input connection plus the peer identity the handshake
+/// proved.
+struct Connected {
+    conn: Arc<dyn Conn + Send + Sync>,
+    addr: SocketAddr,
+    fingerprint: Option<String>,
+}
+
+async fn connect_any(
+    addrs: &[SocketAddr],
+    cert: Certificate,
+    allowed: lan_mouse_data::AuthorizedFingerprints,
+) -> Result<Connected, LanMouseConnectionError> {
+    let mut joinset = JoinSet::new();
+    for &addr in addrs {
+        joinset.spawn_local(connect(addr, cert.clone(), allowed.clone()));
+    }
+    loop {
+        match joinset.join_next().await {
+            None => return Err(LanMouseConnectionError::NotConnected),
+            Some(r) => match r.expect("join error") {
+                Ok(conn) => return Ok(conn),
+                Err((a, e)) => {
+                    log::warn!("failed to connect to {a}: `{e}`")
+                }
+            },
+        };
+    }
+}
+
+type ArcConn = Arc<dyn Conn + Send + Sync>;
+type SharedConns = Rc<Mutex<HashMap<SocketAddr, ArcConn>>>;
+
+pub(crate) struct LanMouseConnection {
+    cert: Certificate,
+    allowed_fingerprints: lan_mouse_data::AuthorizedFingerprints,
+    client_manager: ClientManager,
+    conns: SharedConns,
+    connecting: Rc<Mutex<HashSet<ClientHandle>>>,
+    recv_rx: Receiver<(ClientHandle, ProtoEvent)>,
+    recv_tx: Sender<(ClientHandle, ProtoEvent)>,
+    ping_response: Rc<RefCell<HashSet<SocketAddr>>>,
+}
+
+impl LanMouseConnection {
+    pub(crate) fn new(
+        cert: Certificate,
+        client_manager: ClientManager,
+        allowed_fingerprints: lan_mouse_data::AuthorizedFingerprints,
+    ) -> Self {
+        let (recv_tx, recv_rx) = channel();
+        Self {
+            cert,
+            allowed_fingerprints,
+            client_manager,
+            conns: Default::default(),
+            connecting: Default::default(),
+            recv_rx,
+            recv_tx,
+            ping_response: Default::default(),
+        }
+    }
+
+    pub(crate) async fn recv(&mut self) -> (ClientHandle, ProtoEvent) {
+        self.recv_rx.recv().await.expect("channel closed")
+    }
+
+    pub(crate) async fn send(
+        &self,
+        event: ProtoEvent,
+        handle: ClientHandle,
+    ) -> Result<(), LanMouseConnectionError> {
+        let (buf, len): ([u8; MAX_EVENT_SIZE], usize) = event.into();
+        let buf = &buf[..len];
+        if let Some(addr) = self.client_manager.active_addr(handle) {
+            let conn = {
+                let conns = self.conns.lock().await;
+                conns.get(&addr).cloned()
+            };
+            if let Some(conn) = conn {
+                if !self.client_manager.alive(handle) {
+                    return Err(LanMouseConnectionError::TargetEmulationDisabled);
+                }
+                match conn.send(buf).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::warn!("client {handle} failed to send: {e}");
+                        disconnect(&self.client_manager, handle, addr, &self.conns).await;
+                    }
+                }
+                log::trace!("{event} >->->->->- {addr}");
+                return Ok(());
+            }
+        }
+
+        // check if we are already trying to connect
+        let mut connecting = self.connecting.lock().await;
+        if !connecting.contains(&handle) {
+            connecting.insert(handle);
+            // connect in the background
+            let context = ConnectContext {
+                client_manager: self.client_manager.clone(),
+                cert: self.cert.clone(),
+                allowed_fingerprints: self.allowed_fingerprints.clone(),
+                conns: self.conns.clone(),
+                connecting: self.connecting.clone(),
+                recv_tx: self.recv_tx.clone(),
+                ping_response: self.ping_response.clone(),
+            };
+            spawn_local(connect_to_handle(context, handle));
+        }
+        Err(LanMouseConnectionError::NotConnected)
+    }
+}
+
+struct ConnectContext {
+    client_manager: ClientManager,
+    cert: Certificate,
+    allowed_fingerprints: lan_mouse_data::AuthorizedFingerprints,
+    conns: SharedConns,
+    connecting: Rc<Mutex<HashSet<ClientHandle>>>,
+    recv_tx: Sender<(ClientHandle, ProtoEvent)>,
+    ping_response: Rc<RefCell<HashSet<SocketAddr>>>,
+}
+
+async fn connect_to_handle(
+    context: ConnectContext,
+    handle: ClientHandle,
+) -> Result<(), LanMouseConnectionError> {
+    let ConnectContext {
+        client_manager,
+        cert,
+        allowed_fingerprints,
+        conns,
+        connecting,
+        recv_tx: tx,
+        ping_response,
+    } = context;
+    log::info!("client {handle} connecting ...");
+    // sending did not work, figure out active conn.
+    if let Some(addrs) = client_manager.get_ips(handle) {
+        let port = client_manager.get_port(handle).unwrap_or(DEFAULT_PORT);
+        let addrs = addrs
+            .into_iter()
+            .map(|a| SocketAddr::new(a, port))
+            .collect::<Vec<_>>();
+        log::info!("client ({handle}) connecting ... (ips: {addrs:?})");
+        let res = connect_any(&addrs, cert, allowed_fingerprints).await;
+        let Connected {
+            conn,
+            addr,
+            fingerprint,
+        } = match res {
+            Ok(c) => c,
+            Err(e) => {
+                connecting.lock().await.remove(&handle);
+                return Err(e);
+            }
+        };
+        log::info!("client ({handle}) connected @ {addr}");
+        client_manager.set_active_addr(handle, Some(addr));
+        if let Some(fingerprint) = fingerprint {
+            client_manager.set_fingerprint(handle, fingerprint);
+        }
+        conns.lock().await.insert(addr, conn.clone());
+        connecting.lock().await.remove(&handle);
+
+        // Best-effort version handshake. Send our commit hash once
+        // immediately after the DTLS handshake; the listen side
+        // mirrors a Hello back so the receive loop can populate
+        // `peer_commit`. Old peers will silently skip this event
+        // per the forward-compat handler in [`receive_loop`].
+        let (buf, len) = ProtoEvent::Hello {
+            commit: local_commit(),
+        }
+        .into();
+        if let Err(e) = conn.send(&buf[..len]).await {
+            log::debug!("hello send to {addr} failed: {e}");
+        }
+
+        // poll connection for active
+        spawn_local(ping_pong(addr, conn.clone(), ping_response.clone()));
+
+        // receiver
+        spawn_local(receive_loop(
+            client_manager,
+            handle,
+            addr,
+            conn,
+            conns,
+            tx,
+            ping_response.clone(),
+        ));
+        return Ok(());
+    }
+    connecting.lock().await.remove(&handle);
+    Err(LanMouseConnectionError::NotConnected)
+}
+
+async fn ping_pong(
+    addr: SocketAddr,
+    conn: Arc<dyn Conn + Send + Sync>,
+    ping_response: Rc<RefCell<HashSet<SocketAddr>>>,
+) {
+    loop {
+        let (buf, len) = ProtoEvent::Ping.into();
+
+        // send 4 pings, at least one must be answered
+        for _ in 0..4 {
+            if let Err(e) = conn.send(&buf[..len]).await {
+                log::warn!("{addr}: send error `{e}`, closing connection");
+                let _ = conn.close().await;
+                break;
+            }
+            log::trace!("PING >->->->->- {addr}");
+
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        if !ping_response.borrow_mut().remove(&addr) {
+            log::warn!("{addr} did not respond, closing connection");
+            let _ = conn.close().await;
+            return;
+        }
+    }
+}
+
+async fn receive_loop(
+    client_manager: ClientManager,
+    handle: ClientHandle,
+    addr: SocketAddr,
+    conn: Arc<dyn Conn + Send + Sync>,
+    conns: Rc<Mutex<HashMap<SocketAddr, Arc<dyn Conn + Send + Sync>>>>,
+    tx: Sender<(ClientHandle, ProtoEvent)>,
+    ping_response: Rc<RefCell<HashSet<SocketAddr>>>,
+) {
+    let mut buf = [0u8; MAX_EVENT_SIZE];
+    while let Ok(len) = conn.recv(&mut buf).await {
+        match ProtoEvent::decode(&buf[..len]) {
+            Ok(event) => {
+                log::trace!("{addr} <==<==<== {event}");
+                match event {
+                    ProtoEvent::Pong(b) => {
+                        client_manager.set_active_addr(handle, Some(addr));
+                        client_manager.set_alive(handle, b);
+                        ping_response.borrow_mut().insert(addr);
+                    }
+                    ProtoEvent::Hello { commit } => {
+                        client_manager.set_peer_commit(handle, Some(commit));
+                    }
+                    event => tx.send((handle, event)).expect("channel closed"),
+                }
+            }
+            // Skip undecodable datagrams without dropping the
+            // connection. Each DTLS recv is one framed message, so
+            // skipping is safe and keeps us forward-compatible with
+            // peers that send event types we don't yet know about.
+            Err(e) => log::debug!("ignoring undecodable event from {addr}: {e}"),
+        }
+    }
+    log::warn!("recv error");
+    disconnect(&client_manager, handle, addr, &conns).await;
+}
+
+async fn disconnect(
+    client_manager: &ClientManager,
+    handle: ClientHandle,
+    addr: SocketAddr,
+    conns: &Mutex<HashMap<SocketAddr, Arc<dyn Conn + Send + Sync>>>,
+) {
+    log::warn!("client ({handle}) @ {addr} connection closed");
+    conns.lock().await.remove(&addr);
+    client_manager.set_active_addr(handle, None);
+    client_manager.set_peer_commit(handle, None);
+    let active: Vec<SocketAddr> = conns.lock().await.keys().copied().collect();
+    log::info!("active connections: {active:?}");
+}

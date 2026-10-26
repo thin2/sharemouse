@@ -1,0 +1,129 @@
+.peer-match > box > list .subtitle {
+    color: @success_color;
+}
+
+.peer-mismatch > box > list .subtitle {
+    font-weight: bold;
+    color: @warning_color;
+}
+
+.peer-unknown > box > list .subtitle {
+    color: @warning_color;
+}
+
+/* Screen arrangement editor */
+.layout-panel {
+    padding: 12px;
+    border-radius: 12px;
+    background-color: alpha(@card_bg_color, 0.5);
+}
+
+.layout-zone {
+    border: 2px dashed alpha(@borders, 0.9);
+    border-radius: 10px;
+    padding: 6px 10px;
+}
+
+.layout-zone:drop(active) {
+    border-color: @accent_color;
+    background-color: alpha(@accent_color, 0.15);
+}
+
+.layout-center {
+    border-radius: 10px;
+    padding: 6px 10px;
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+}
+
+.layout-chip {
+    margin-top: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    min-height: 24px;
+    background-color: alpha(@card_fg_color, 0.12);
+    font-size: 0.9em;
+}
+
+/* Connection status chip on each device card */
+.status-chip {
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.85em;
+    background-color: alpha(@card_fg_color, 0.1);
+}
+
+.status-chip.status-active {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    font-weight: bold;
+}
+
+.status-chip.status-online {
+    color: @success_color;
+}
+
+.status-chip.status-offline {
+    color: @dim_label_color;
+}
+
+/* A conversation has one reading surface, with direction encoded by alignment. */
+.conversation-shell {
+    background: @window_bg_color;
+    color: @window_fg_color;
+}
+.conversation-list {
+    background: transparent;
+    padding: 12px 18px;
+}
+.conversation-list > row {
+    background: transparent;
+    padding: 6px 0;
+}
+.message-bubble {
+    padding: 12px 16px;
+    border-radius: 14px;
+    margin-right: 36px;
+    background: @card_bg_color;
+    color: @card_fg_color;
+}
+.message-outgoing {
+    margin-left: 36px;
+    margin-right: 0;
+    background: alpha(@accent_bg_color, 0.18);
+}
+.message-caption {
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+.conversation-compose {
+    padding: 16px 20px;
+    border-top: 1px solid @borders;
+    background: @card_bg_color;
+}
+.conversation-compose entry {
+    min-height: 38px;
+}
+.conversation-sidebar {
+    padding: 20px 12px 12px;
+    border-right: 1px solid @borders;
+    background: alpha(@card_bg_color, 0.45);
+}
+.conversation-sidebar > label {
+    padding-left: 10px;
+}
+.conversation-peers {
+    background: transparent;
+}
+.conversation-peers > row {
+    padding: 14px 10px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+}
+.conversation-peers > row:selected {
+    background: alpha(@accent_bg_color, 0.18);
+    color: @window_fg_color;
+}
+.workspace-navigation button {
+    padding: 8px 18px;
+}

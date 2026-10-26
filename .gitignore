@@ -1,0 +1,40 @@
+/target
+.gdbinit
+.idea/
+.vs/
+.vscode/
+.direnv/
+result
+*.pem
+*.csr
+extfile.conf
+
+# flatpak files
+.flatpak-builder
+repo
+
+# OS metadata
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+__pycache__/
+
+# Local development data and credentials
+.local/
+.env
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+
+# Private planning, handoffs and machine-specific diagnostics (local only)
+/planning/
+/docs/需求访谈.md
+/docs/开发进度.md
+/docs/跨平台开发.md
+/docs/崩溃分析.md
+/docs/键鼠共享崩溃复核.md
+/docs/crash-logs/
+/diagnostics-*.json

@@ -1,0 +1,29 @@
+[package]
+name = "lan-mouse-gtk"
+description = "GTK4 / Libadwaita Frontend for lan-mouse"
+version = "0.3.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/feschber/lan-mouse"
+
+[[test]]
+name = "conversation_ui"
+harness = false
+
+[dependencies]
+# v4_6 is required for `GdkFileList`, the value type a file drop
+# carries; without it drag-and-drop cannot be typed. That raises the
+# minimum GTK from 4.2 to 4.6 (2023).
+gtk = { package = "gtk4", version = "0.9.0", features = ["v4_2", "v4_6"] }
+adw = { package = "libadwaita", version = "0.7.0", features = ["v1_1", "v1_2"] }
+async-channel = { version = "2.1.1" }
+hostname = "0.4.0"
+log = "0.4.20"
+lan-mouse-ipc = { path = "../lan-mouse-ipc", version = "0.3.0" }
+thiserror = "2.0.0"
+
+[build-dependencies]
+glib-build-tools = { version = "0.20.0" }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader"] }
