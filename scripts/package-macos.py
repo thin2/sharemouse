@@ -47,7 +47,7 @@ def build(options):
     executable.parent.mkdir(parents=True)
     resources.mkdir()
     shutil.copy2(binary, executable)
-    svg = ROOT / "lan-mouse-gtk/resources/de.feschber.LanMouse.svg"
+    svg = ROOT / "assets/icons/menubar-template.svg"
     shutil.copy2(ROOT / "app-icon.icns", resources / "icon.icns")
     run("rsvg-convert", "-w", "44", "-h", "44", str(svg),
         "-o", str(resources / "menubar-template.png"))

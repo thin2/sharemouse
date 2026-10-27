@@ -11,6 +11,7 @@ mod macos_privacy;
 #[cfg(target_os = "macos")]
 mod macos_status_item;
 mod message_log;
+mod palette;
 mod preferences;
 mod window;
 #[cfg(windows)]
@@ -208,6 +209,29 @@ fn load_css() {
         &provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+}
+
+thread_local! {
+    static PALETTE_PROVIDER: CssProvider = CssProvider::new();
+}
+
+/// Install (or refresh) the palette colors. They sit above the static
+/// stylesheet's priority so libadwaita's own surface colors follow too.
+pub(crate) fn apply_palette(palette: preferences::Palette) {
+    let Some(display) = Display::default() else {
+        return;
+    };
+    let dark = adw::StyleManager::default().is_dark();
+    // libadwaita 1.6 reads CSS variables instead of named colors.
+    let variables = (adw::major_version(), adw::minor_version()) >= (1, 6);
+    PALETTE_PROVIDER.with(|provider| {
+        provider.load_from_data(&palette::css(palette, dark, variables));
+        gtk::style_context_add_provider_for_display(
+            &display,
+            provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+        );
+    });
 }
 
 fn load_icons() {
@@ -425,13 +449,15 @@ fn build_ui(app: &Application) {
                         window.show_toast(format!("device connected: {addr}").as_str());
                     }
                     FrontendEvent::DeviceEntered {
-                        fingerprint: _,
+                        fingerprint,
                         addr,
                         pos,
                     } => {
+                        window.set_controlling_device(Some((fingerprint.clone(), addr)));
                         window.show_toast(format!("device entered: {addr} ({pos})").as_str());
                     }
                     FrontendEvent::IncomingDisconnected(addr) => {
+                        window.clear_controlling_device(addr);
                         window.show_toast(format!("{addr} disconnected").as_str());
                     }
                     // Data sessions are shown in the Direct Links group;

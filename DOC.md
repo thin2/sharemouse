@@ -2,13 +2,18 @@
 
 ## Dedicated conversations
 
-The fixed top navigation opens Messages, Files, Devices, or Settings.
+Tabs in the title bar open Devices, Messages, Files, or Settings.
 Messages has a visible device sidebar, a scrollable conversation, and a fixed
 bottom composer. Each device keeps a separate in-memory draft. Identity discovery
 preserves the selected recipient and draft. Files offers file/folder selection,
-drag-and-drop, the receive directory and transfer records. Starting a transfer
-opens that page. Devices puts IP enrollment and sharing controls before layout;
-authorization, ports and appearance live in Settings.
+drag-and-drop and transfer records. Starting a transfer opens that page.
+Devices shows where input currently goes, the screen layout and device cards;
+pairing (nearby hosts, a manual IP, and accepting new devices) lives in the
+Add device dialog. Settings → General holds appearance, autostart, clipboard
+and the receive directory; Settings → Advanced holds capture status, ports,
+fingerprint, authorized devices and manual device configuration. The palette
+(Ember or Pine, each with light and dark colors) is a frontend preference in
+`ui.ini`; the accent marks only the device currently receiving input.
 Incoming bubbles align left and outgoing bubbles right; text is selectable,
 links and image previews remain actionable. Conversations use peer identity,
 not display names; duplicate labels show an identity suffix. Unconfigured peers

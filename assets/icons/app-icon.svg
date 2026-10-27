@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Option A from docs/design: this computer (solid) linked to the
+       controlled computer (accent outline). Colors are the Ember palette. -->
+  <rect x="4" y="4" width="1016" height="1016" rx="226" fill="#FBFAF8" stroke="#E6E1DA" stroke-width="8"/>
+  <rect x="88" y="301" width="469" height="422" rx="46" fill="#1F1C19"/>
+  <line x1="498" y1="522" x2="600" y2="522" stroke="#C8682F" stroke-width="46" stroke-linecap="round"/>
+  <rect x="601" y="382" width="314" height="281" rx="34" fill="none" stroke="#C8682F" stroke-width="46"/>
+</svg>

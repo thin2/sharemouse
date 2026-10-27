@@ -15,7 +15,7 @@ usage: $0 [SVG [ICNS [ICONSET]]]
 
 ARGUMENTS
     SVG     The SVG file to convert
-            Omit to use ./app-icon.icns (SVG is used for the menu bar template)
+            Omit to use ./app-icon.icns and ./assets/icons/menubar-template.svg
     ICNS    The icns file to create
             Defaults to ./target/icon.icns
     ICONSET The iconset directory to create
@@ -38,7 +38,7 @@ set -u
 if [ "$#" -eq 0 ]; then
     mkdir -p "$(dirname "$icns")"
     cp ./app-icon.icns "$icns"
-    rsvg-convert -w 44 -h 44 "$svg" |
+    rsvg-convert -w 44 -h 44 ./assets/icons/menubar-template.svg |
         magick - -channel RGB -evaluate set 0 +channel \
             "$(dirname "$icns")/menubar-template.png"
     exit 0

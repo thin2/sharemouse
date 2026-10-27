@@ -1,129 +1,542 @@
-.peer-match > box > list .subtitle {
-    color: @success_color;
-}
+/* Colors come from `palette.rs` as @sm_* named colors, regenerated when
+   the palette or light/dark mode changes. The accent marks only where
+   the keyboard and mouse are now; everything else uses neutrals. */
 
-.peer-mismatch > box > list .subtitle {
-    font-weight: bold;
-    color: @warning_color;
-}
-
-.peer-unknown > box > list .subtitle {
-    color: @warning_color;
-}
-
-/* Screen arrangement editor */
-.layout-panel {
-    padding: 12px;
-    border-radius: 12px;
-    background-color: alpha(@card_bg_color, 0.5);
-}
-
-.layout-zone {
-    border: 2px dashed alpha(@borders, 0.9);
-    border-radius: 10px;
-    padding: 6px 10px;
-}
-
-.layout-zone:drop(active) {
-    border-color: @accent_color;
-    background-color: alpha(@accent_color, 0.15);
-}
-
-.layout-center {
-    border-radius: 10px;
-    padding: 6px 10px;
-    background-color: @accent_bg_color;
-    color: @accent_fg_color;
-}
-
-.layout-chip {
-    margin-top: 4px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    min-height: 24px;
-    background-color: alpha(@card_fg_color, 0.12);
-    font-size: 0.9em;
-}
-
-/* Connection status chip on each device card */
-.status-chip {
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: 0.85em;
-    background-color: alpha(@card_fg_color, 0.1);
-}
-
-.status-chip.status-active {
-    background-color: @accent_bg_color;
-    color: @accent_fg_color;
-    font-weight: bold;
-}
-
-.status-chip.status-online {
-    color: @success_color;
-}
-
-.status-chip.status-offline {
-    color: @dim_label_color;
-}
-
-/* A conversation has one reading surface, with direction encoded by alignment. */
+window,
 .conversation-shell {
-    background: @window_bg_color;
-    color: @window_fg_color;
+    background-color: @sm_bg;
+    color: @sm_fg;
+    font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", system-ui, sans-serif;
 }
-.conversation-list {
+
+headerbar {
+    background: @sm_bg;
+    box-shadow: none;
+    border: none;
+    min-height: 54px;
+}
+
+.brand label {
+    font-family: "Bahnschrift", "DIN Alternate", "Segoe UI Variable Display", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 14.5px;
+    letter-spacing: 0.02em;
+}
+
+/* Tabs: text only, the selected one carries an accent dot. */
+.tabs {
+    border-spacing: 26px;
+}
+.tabs button {
+    background: none;
+    box-shadow: none;
+    border: none;
+    min-height: 0;
+    padding: 6px 2px 10px;
+    color: @sm_dim;
+    font-weight: 600;
+    background-repeat: no-repeat;
+}
+.tabs button:hover,
+.tabs button:checked {
+    color: @sm_fg;
+    background-color: transparent;
+}
+.tabs button:checked {
+    background-image: radial-gradient(circle, @sm_accent 2px, transparent 2.6px);
+    background-size: 6px 6px;
+    background-position: center bottom;
+}
+
+.eyebrow {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 500;
+    font-size: 11.5px;
+    letter-spacing: 0.18em;
+    color: @sm_dim;
+}
+
+.mono {
+    font-family: "Cascadia Mono", "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+}
+
+.dim {
+    color: @sm_dim;
+}
+
+/* Pill buttons: neutral by default, inverted for the main action. */
+button.pill {
+    border-radius: 999px;
+    padding: 8px 18px;
+    font-weight: 600;
+    background: @sm_sunk;
+    color: @sm_fg;
+    box-shadow: none;
+}
+button.pill:hover {
+    background: mix(@sm_sunk, @sm_fg, 0.08);
+}
+button.pill.suggested-action {
+    background: @sm_fg;
+    color: @sm_bg;
+}
+button.pill.suggested-action:hover {
+    background: mix(@sm_fg, @sm_bg, 0.12);
+}
+button.pill:disabled {
+    opacity: 0.45;
+}
+
+switch:checked {
+    background-color: @sm_accent;
+}
+
+/* ---------- home: status ---------- */
+.where-title {
+    font-family: "Bahnschrift", "DIN Alternate", "Segoe UI Variable Display", "Microsoft YaHei UI", sans-serif;
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.where-title.home {
+    color: @sm_accent;
+}
+.where-hint {
+    font-size: 12.5px;
+    color: @sm_dim;
+}
+.kbd {
+    font-family: "Cascadia Mono", "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: @sm_fg;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: @sm_card;
+    box-shadow: 0 0 0 1px alpha(@sm_fg, 0.1), 0 1px 0 alpha(@sm_fg, 0.1);
+}
+
+/* ---------- screen layout ---------- */
+.layout-stage {
+    margin-top: 18px;
+    padding-bottom: 12px;
+}
+.layout-floor {
+    margin: 0 40px;
+    background-color: alpha(@sm_fg, 0.1);
+}
+.layout-zone {
+    margin: 0 4px;
+}
+.layout-slot {
+    border-radius: 10px;
+    border: 1.5px dashed alpha(@sm_fg, 0.16);
+    color: @sm_faint;
+    font-size: 12px;
+    margin-bottom: 16px;
+}
+.layout-zone:drop(active) .layout-slot {
+    border-color: @sm_accent;
+    color: @sm_accent;
+    background-color: alpha(@sm_accent, 0.06);
+}
+
+.screen {
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: @sm_card;
+    color: @sm_fg;
+    border: none;
+    box-shadow: 0 0 0 1px alpha(@sm_fg, 0.1), 0 6px 18px -10px alpha(@sm_fg, 0.25);
+}
+button.screen:hover {
+    background: mix(@sm_card, @sm_fg, 0.03);
+}
+.screen-name {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+}
+.screen-meta {
+    font-family: "Cascadia Mono", "SF Mono", Consolas, monospace;
+    font-size: 10.5px;
+    color: @sm_dim;
+}
+.screen-who {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: @sm_faint;
+}
+.screen.self {
+    background: @sm_fg;
+    color: @sm_bg;
+    box-shadow: 0 6px 18px -10px alpha(@sm_fg, 0.4);
+}
+.screen.self .screen-who,
+.screen.self .screen-meta {
+    color: mix(@sm_fg, @sm_bg, 0.6);
+}
+.screen.target {
+    background: mix(@sm_card, @sm_accent, 0.1);
+    box-shadow: 0 0 0 1.5px @sm_accent, 0 8px 20px -16px alpha(@sm_accent, 0.3);
+}
+.screen.target .screen-who {
+    color: @sm_accent;
+}
+.screen.off {
     background: transparent;
-    padding: 12px 18px;
+    box-shadow: inset 0 0 0 1px alpha(@sm_fg, 0.1);
+    opacity: 0.65;
 }
-.conversation-list > row {
-    background: transparent;
-    padding: 6px 0;
+.monitor-neck,
+.monitor-foot {
+    background-color: alpha(@sm_fg, 0.1);
+    border-radius: 2px;
 }
-.message-bubble {
-    padding: 12px 16px;
+.seam {
+    border-radius: 2px;
+}
+.seam.lit {
+    background-color: @sm_accent;
+}
+
+/* ---------- devices ---------- */
+.section {
+    margin: 30px 2px 14px;
+}
+.section-title {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 0.02em;
+}
+.section-count {
+    font-family: "Cascadia Mono", "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    color: @sm_faint;
+}
+.section-note {
+    font-size: 12.5px;
+    color: @sm_dim;
+}
+
+.device-grid > flowboxchild {
+    padding: 0;
+    background: none;
+}
+.sm-card {
+    background: @sm_card;
+    color: @sm_fg;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px alpha(@sm_fg, 0.05), 0 10px 30px -12px alpha(@sm_fg, 0.14);
+}
+.device-card {
+    padding: 16px 18px;
+}
+.device-name {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 20px;
+}
+.device-meta {
+    padding-top: 11px;
+    border-top: 1px solid alpha(@sm_fg, 0.06);
+}
+.device-meta .mono {
+    font-size: 13.5px;
+    color: @sm_dim;
+}
+.device-side {
+    font-size: 13px;
+    color: @sm_faint;
+}
+.state {
+    font-size: 14px;
+    color: @sm_dim;
+}
+.state-dot {
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 3px;
+    background-color: @sm_faint;
+}
+.state.on .state-dot {
+    background-color: @sm_fg;
+}
+.state.live {
+    color: @sm_accent;
+}
+.state.live .state-dot {
+    background-color: @sm_accent;
+    box-shadow: 0 0 0 3px alpha(@sm_accent, 0.2);
+}
+.more {
+    min-width: 28px;
+    min-height: 24px;
+    padding: 0 6px;
+    border-radius: 8px;
+    color: @sm_faint;
+    background: none;
+    box-shadow: none;
+}
+.more:hover {
+    color: @sm_fg;
+    background: @sm_sunk;
+}
+.add-tile {
+    min-height: 112px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    border: 1px dashed alpha(@sm_fg, 0.16);
+    background: none;
+    box-shadow: none;
+    color: @sm_dim;
+}
+.add-tile:hover {
+    border-color: @sm_accent;
+    background: alpha(@sm_accent, 0.05);
+}
+.add-tile .plus {
+    font-family: "Bahnschrift", "DIN Alternate", sans-serif;
+    font-weight: 300;
+    font-size: 30px;
+    color: @sm_fg;
+}
+.add-tile .add-title {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: @sm_fg;
+}
+.add-tile .add-note {
+    font-size: 12.5px;
+}
+
+/* first run */
+.first-title {
+    font-family: "Bahnschrift", "DIN Alternate", "Segoe UI Variable Display", "Microsoft YaHei UI", sans-serif;
+    font-weight: 300;
+    font-size: 44px;
+}
+.first-slot {
+    border-radius: 10px;
+    border: 1.5px dashed alpha(@sm_fg, 0.16);
+    color: @sm_faint;
+    font-size: 26px;
+    font-weight: 300;
+    margin-bottom: 16px;
+}
+
+/* ---------- add device dialog ---------- */
+.add-dialog {
+    background: @sm_card;
+    color: @sm_fg;
+}
+.dialog-title {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 300;
+    font-size: 26px;
+}
+.nearby-list {
+    background: none;
+}
+.nearby-list > row {
+    padding: 12px 0;
+    background: none;
+    border-bottom: 1px solid alpha(@sm_fg, 0.06);
+}
+.nearby-name {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+}
+.round-entry {
+    border-radius: 999px;
+    padding: 4px 16px;
+    min-height: 34px;
+    background: @sm_sunk;
+    box-shadow: none;
+    font-family: "Cascadia Mono", "SF Mono", Consolas, monospace;
+    font-size: 13px;
+}
+.be-found {
+    padding: 16px 18px;
     border-radius: 14px;
-    margin-right: 36px;
-    background: @card_bg_color;
-    color: @card_fg_color;
+    background: @sm_bg;
 }
-.message-outgoing {
-    margin-left: 36px;
-    margin-right: 0;
-    background: alpha(@accent_bg_color, 0.18);
+.be-found-ip {
+    font-family: "Cascadia Mono", "SF Mono", Consolas, monospace;
+    font-weight: 500;
+    font-size: 18px;
 }
-.message-caption {
-    font-size: 0.85em;
-    opacity: 0.75;
+.enrollment-status {
+    font-size: 12.5px;
+    color: @sm_dim;
 }
-.conversation-compose {
-    padding: 16px 20px;
-    border-top: 1px solid @borders;
-    background: @card_bg_color;
-}
-.conversation-compose entry {
-    min-height: 38px;
+
+/* ---------- messages ---------- */
+.conversation-card {
+    margin: 10px 28px 28px;
 }
 .conversation-sidebar {
-    padding: 20px 12px 12px;
-    border-right: 1px solid @borders;
-    background: alpha(@card_bg_color, 0.45);
+    padding: 20px 12px;
+    border-right: 1px solid alpha(@sm_fg, 0.06);
 }
-.conversation-sidebar > label {
-    padding-left: 10px;
+.conversation-sidebar > .eyebrow {
+    margin: 0 10px 4px;
 }
 .conversation-peers {
     background: transparent;
 }
 .conversation-peers > row {
-    padding: 14px 10px;
-    margin-bottom: 6px;
-    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 2px;
+    border-radius: 10px;
+    background: none;
 }
 .conversation-peers > row:selected {
-    background: alpha(@accent_bg_color, 0.18);
-    color: @window_fg_color;
+    background: @sm_bg;
+    color: @sm_fg;
 }
-.workspace-navigation button {
-    padding: 8px 18px;
+.peer-name {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 14.5px;
+}
+.peer-state {
+    font-size: 11.5px;
+    color: @sm_dim;
+}
+.thread-head {
+    background: none;
+    border-bottom: 1px solid alpha(@sm_fg, 0.06);
+}
+.thread-head > row {
+    background: none;
+    padding: 6px 12px;
+}
+.conversation-list {
+    background: transparent;
+    padding: 20px 26px;
+}
+.conversation-list > row {
+    background: transparent;
+    padding: 5px 0;
+}
+.message-bubble {
+    padding: 9px 15px;
+    border-radius: 18px;
+    border-bottom-left-radius: 6px;
+    margin-right: 120px;
+    background: @sm_bg;
+    color: @sm_fg;
+}
+.message-outgoing {
+    margin-left: 120px;
+    margin-right: 0;
+    border-bottom-left-radius: 18px;
+    border-bottom-right-radius: 6px;
+    background: @sm_fg;
+    color: @sm_bg;
+}
+.message-caption {
+    font-size: 11px;
+    color: @sm_faint;
+}
+.message-outgoing .message-caption {
+    color: mix(@sm_fg, @sm_bg, 0.55);
+}
+.message-bubble link,
+.message-bubble label link {
+    color: @sm_accent;
+}
+.conversation-compose {
+    padding: 14px 18px;
+    border-top: 1px solid alpha(@sm_fg, 0.06);
+}
+.conversation-compose entry {
+    border-radius: 999px;
+    padding: 4px 16px;
+    min-height: 34px;
+    background: @sm_bg;
+    box-shadow: none;
+}
+
+/* ---------- files ---------- */
+.drop-zone {
+    padding: 30px 32px;
+    border-radius: 18px;
+    border: 1px dashed alpha(@sm_fg, 0.16);
+}
+.drop-glyph {
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 28px;
+    background: @sm_card;
+    color: @sm_fg;
+    box-shadow: 0 1px 2px alpha(@sm_fg, 0.05), 0 10px 30px -12px alpha(@sm_fg, 0.14);
+}
+.drop-title {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 300;
+    font-size: 24px;
+}
+.drop-note {
+    font-size: 13px;
+    color: @sm_dim;
+}
+
+/* Lists inside cards: hairline separators, no inner boxes. */
+.sm-list {
+    background: none;
+    padding: 2px 22px;
+}
+.sm-list > row {
+    background: none;
+    padding: 4px 0;
+}
+.sm-list > row:not(:first-child) {
+    border-top: 1px solid alpha(@sm_fg, 0.06);
+}
+
+progressbar trough {
+    min-height: 3px;
+    border-radius: 3px;
+    background: @sm_sunk;
+}
+progressbar progress {
+    min-height: 3px;
+    border-radius: 3px;
+    background: @sm_accent;
+}
+
+/* ---------- settings ---------- */
+.settings-page preferencesgroup > box > label.title,
+.settings-page preferencesgroup .header .title {
+    font-family: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+}
+.settings-page list.boxed-list {
+    background: @sm_card;
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 1px 2px alpha(@sm_fg, 0.05), 0 10px 30px -12px alpha(@sm_fg, 0.14);
+}
+.settings-page list.boxed-list > row {
+    background: none;
+}
+
+/* Manual device rows keep their version indicator. */
+.peer-match > box > list .subtitle {
+    color: @success_color;
+}
+.peer-mismatch > box > list .subtitle {
+    font-weight: bold;
+    color: @warning_color;
+}
+.peer-unknown > box > list .subtitle {
+    color: @warning_color;
 }

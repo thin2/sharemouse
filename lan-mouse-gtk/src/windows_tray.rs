@@ -128,13 +128,35 @@ unsafe fn icon_data(hwnd: HWND) -> NOTIFYICONDATAW {
         uID: 1,
         uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
         uCallbackMessage: CALLBACK,
-        hIcon: LoadIconW(None, IDI_APPLICATION).unwrap_or_default(),
+        hIcon: app_icon(),
         ..Default::default()
     };
-    for (dest, value) in data.szTip.iter_mut().zip("Lan Mouse".encode_utf16()) {
+    for (dest, value) in data.szTip.iter_mut().zip("Sharemouse".encode_utf16()) {
         *dest = value;
     }
     data
+}
+
+/// The executable's own icon (resource 1, embedded by winres from app-icon.ico).
+/// `LR_SHARED` lets repeated taskbar re-registrations reuse one handle.
+unsafe fn app_icon() -> HICON {
+    let (width, height) = (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+    GetModuleHandleW(None)
+        .ok()
+        .and_then(|module| {
+            LoadImageW(
+                Some(module.into()),
+                PCWSTR(1 as *const u16),
+                IMAGE_ICON,
+                width,
+                height,
+                LR_SHARED,
+            )
+            .ok()
+        })
+        .map(|handle| HICON(handle.0))
+        .or_else(|| LoadIconW(None, IDI_APPLICATION).ok())
+        .unwrap_or_default()
 }
 
 unsafe extern "system" fn window_proc(

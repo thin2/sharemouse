@@ -121,11 +121,53 @@ impl Theme {
     }
 }
 
+/// Accent family for the whole window. Each palette tints every
+/// neutral toward its hue and keeps one accent for the control target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Palette {
+    #[default]
+    Ember,
+    Pine,
+}
+
+impl Palette {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Ember => "ember",
+            Self::Pine => "pine",
+        }
+    }
+
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "ember" => Some(Self::Ember),
+            "pine" => Some(Self::Pine),
+            _ => None,
+        }
+    }
+
+    /// Index of this palette in the selector model, and back.
+    pub fn index(self) -> u32 {
+        match self {
+            Self::Ember => 0,
+            Self::Pine => 1,
+        }
+    }
+
+    pub fn from_index(index: u32) -> Self {
+        match index {
+            1 => Self::Pine,
+            _ => Self::Ember,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UiPreferences {
     pub autostart: bool,
     pub language: Language,
     pub theme: Theme,
+    pub palette: Palette,
 }
 
 impl Default for UiPreferences {
@@ -134,6 +176,7 @@ impl Default for UiPreferences {
             autostart: true,
             language: Language::system_default(),
             theme: Theme::System,
+            palette: Palette::Ember,
         }
     }
 }
@@ -171,10 +214,16 @@ impl UiPreferences {
             .ok()
             .and_then(|value| Theme::from_code(value.as_str()))
             .unwrap_or_default();
+        let palette = key_file
+            .string("ui", "palette")
+            .ok()
+            .and_then(|value| Palette::from_code(value.as_str()))
+            .unwrap_or_default();
         let autostart = key_file.boolean("ui", "autostart").unwrap_or(true);
         Self {
             language,
             theme,
+            palette,
             autostart,
         }
     }
@@ -184,6 +233,7 @@ impl UiPreferences {
         key_file.set_boolean("ui", "autostart", self.autostart);
         key_file.set_string("ui", "language", self.language.code());
         key_file.set_string("ui", "theme", self.theme.code());
+        key_file.set_string("ui", "palette", self.palette.code());
         key_file
     }
 }
@@ -412,9 +462,7 @@ pub fn tr(language: Language, key: &str) -> &'static str {
         (Language::Zh, "general.data_port") => "数据端口",
         (Language::En, "placeholder.no_clients") => "No connections!",
         (Language::Zh, "placeholder.no_clients") => "暂无设备连接",
-        (Language::En, "placeholder.no_clients_subtitle") => {
-            "Select the main device above to join"
-        }
+        (Language::En, "placeholder.no_clients_subtitle") => "Select the main device above to join",
         (Language::Zh, "placeholder.no_clients_subtitle") => {
             "在上方选择附近的主设备或输入其 IP 加入，设备会自动出现在这里"
         }
@@ -452,6 +500,92 @@ pub fn tr(language: Language, key: &str) -> &'static str {
         (Language::Zh, "layout.none") => "无设备",
         (Language::En, "layout.drop") => "Drop here",
         (Language::Zh, "layout.drop") => "拖到此处",
+        (Language::En, "home.controlling") => "KEYBOARD & MOUSE ON",
+        (Language::Zh, "home.controlling") => "键鼠正在控制",
+        (Language::En, "home.here") => "KEYBOARD & MOUSE ON",
+        (Language::Zh, "home.here") => "键鼠在",
+        (Language::En, "home.paused") => "SHARING STOPPED",
+        (Language::Zh, "home.paused") => "共享已停止",
+        (Language::En, "home.this_device") => "This device",
+        (Language::Zh, "home.this_device") => "本机",
+        (Language::En, "home.release_before") => "Press",
+        (Language::Zh, "home.release_before") => "按",
+        (Language::En, "home.release_after") => "to come back to this device",
+        (Language::Zh, "home.release_after") => "立即回到本机",
+        (Language::En, "home.devices") => "Devices",
+        (Language::Zh, "home.devices") => "设备",
+        (Language::En, "home.count") => "{} devices",
+        (Language::Zh, "home.count") => "{} 台",
+        (Language::En, "home.drag_hint") => "Drag a screen above to change its side",
+        (Language::Zh, "home.drag_hint") => "拖动上面的屏幕可以调整左右位置",
+        (Language::En, "home.add") => "Add device",
+        (Language::Zh, "home.add") => "添加设备",
+        (Language::En, "home.add_note") => "Nearby computers appear automatically",
+        (Language::Zh, "home.add_note") => "附近的电脑会自动出现",
+        (Language::En, "home.empty_eyebrow") => "NO OTHER DEVICES YET",
+        (Language::Zh, "home.empty_eyebrow") => "还没有其他设备",
+        (Language::En, "home.empty_title") => "Bring in a <b>second computer</b>",
+        (Language::Zh, "home.empty_title") => "把<b>第二台电脑</b>\n接进来",
+        (Language::En, "home.empty_body") => {
+            "Open Sharemouse on both computers on the same network, then control both with this keyboard and mouse."
+        }
+        (Language::Zh, "home.empty_body") => {
+            "两台电脑都打开 Sharemouse，连上同一个网络，就能用这一套键盘鼠标控制它们。"
+        }
+        (Language::En, "home.enable") => "Enable",
+        (Language::Zh, "home.enable") => "启用",
+        (Language::En, "home.disable") => "Disable",
+        (Language::Zh, "home.disable") => "停用",
+        (Language::En, "home.more") => "More actions",
+        (Language::Zh, "home.more") => "更多操作",
+        (Language::En, "add.title") => "Add device",
+        (Language::Zh, "add.title") => "添加设备",
+        (Language::En, "add.nearby") => "NEARBY COMPUTERS",
+        (Language::Zh, "add.nearby") => "附近的电脑",
+        (Language::En, "add.searching") => {
+            "Still searching. The other computer needs “Let other computers connect to me” turned on."
+        }
+        (Language::Zh, "add.searching") => "还在查找。对方需要先打开“让其他电脑连接我”。",
+        (Language::En, "add.by_ip") => "ENTER THE OTHER COMPUTER'S IP",
+        (Language::Zh, "add.by_ip") => "输入对方的 IP",
+        (Language::En, "add.ip_placeholder") => "e.g. 192.168.1.10",
+        (Language::Zh, "add.ip_placeholder") => "例如 192.168.1.10",
+        (Language::En, "add.host") => "LET OTHER COMPUTERS CONNECT TO ME",
+        (Language::Zh, "add.host") => "让其他电脑连接我",
+        (Language::En, "add.host_note") => {
+            "When on, computers on the same network see this one under “Nearby computers”"
+        }
+        (Language::Zh, "add.host_note") => "打开后，同一网络里的电脑会在“附近的电脑”里看到本机",
+        (Language::En, "add.close") => "Close",
+        (Language::Zh, "add.close") => "关闭",
+        (Language::En, "pref.palette") => "Colors",
+        (Language::Zh, "pref.palette") => "配色",
+        (Language::En, "palette.ember") => "Ember",
+        (Language::Zh, "palette.ember") => "暖灰橙",
+        (Language::En, "palette.pine") => "Pine",
+        (Language::Zh, "palette.pine") => "松林",
+        (Language::En, "settings.general") => "General",
+        (Language::Zh, "settings.general") => "常规",
+        (Language::En, "settings.advanced") => "Advanced",
+        (Language::Zh, "settings.advanced") => "高级",
+        (Language::En, "settings.advanced_note") => "For troubleshooting",
+        (Language::Zh, "settings.advanced_note") => "排查问题时使用",
+        (Language::En, "settings.manual") => "Manual device configuration",
+        (Language::Zh, "settings.manual") => "手动配置设备",
+        (Language::En, "settings.manual_note") => "Enter host name, port and side directly",
+        (Language::Zh, "settings.manual_note") => "直接填写主机名、端口和位置",
+        (Language::En, "files.drop_title") => "Drop files here to send to <b>{}</b>",
+        (Language::Zh, "files.drop_title") => "把文件拖到这里，发给 <b>{}</b>",
+        (Language::En, "files.drop_any") => "Drop files here to send them",
+        (Language::Zh, "files.drop_any") => "把文件拖到这里发送",
+        (Language::En, "files.drop_note") => {
+            "Folders work too. You choose the receiving device after dropping."
+        }
+        (Language::Zh, "files.drop_note") => "文件夹也可以。放下后选择接收的设备。",
+        (Language::En, "files.history") => "Transfers",
+        (Language::Zh, "files.history") => "传输记录",
+        (Language::En, "messages.to") => "SEND TO",
+        (Language::Zh, "messages.to") => "发给",
         (Language::En, "lang.en") => "English",
         (Language::Zh, "lang.en") => "English",
         (Language::En, "lang.zh") => "中文",
@@ -664,6 +798,7 @@ mod tests {
             autostart: false,
             language: Language::Zh,
             theme: Theme::Dark,
+            palette: Palette::Pine,
         };
         let restored = UiPreferences::from_key_file(&preferences.to_key_file());
         assert_eq!(restored, preferences);
@@ -674,9 +809,11 @@ mod tests {
         let key_file = glib::KeyFile::new();
         key_file.set_string("ui", "language", "de");
         key_file.set_string("ui", "theme", "sepia");
+        key_file.set_string("ui", "palette", "neon");
         let preferences = UiPreferences::from_key_file(&key_file);
         assert!(preferences.autostart);
         assert_eq!(preferences.theme, Theme::System);
+        assert_eq!(preferences.palette, Palette::Ember);
         assert!(matches!(preferences.language, Language::En | Language::Zh));
     }
 
@@ -741,12 +878,63 @@ mod tests {
             "message.too_long",
             "message.placeholder_title",
             "message.placeholder_subtitle",
+            "home.controlling",
+            "home.here",
+            "home.paused",
+            "home.this_device",
+            "home.release_before",
+            "home.release_after",
+            "home.devices",
+            "home.count",
+            "home.drag_hint",
+            "home.add",
+            "home.add_note",
+            "home.empty_eyebrow",
+            "home.empty_title",
+            "home.empty_body",
+            "home.more",
+            "home.enable",
+            "home.disable",
+            "add.title",
+            "add.nearby",
+            "add.searching",
+            "add.by_ip",
+            "add.ip_placeholder",
+            "add.host",
+            "add.host_note",
+            "add.close",
+            "pref.palette",
+            "palette.ember",
+            "palette.pine",
+            "settings.general",
+            "settings.advanced",
+            "settings.advanced_note",
+            "settings.manual",
+            "settings.manual_note",
+            "files.drop_title",
+            "files.drop_any",
+            "files.drop_note",
+            "files.history",
+            "messages.to",
         ] {
             assert_ne!(tr(Language::En, key), "?", "missing English key {key}");
             assert_ne!(tr(Language::Zh, key), "?", "missing Chinese key {key}");
         }
         assert_eq!(tr(Language::En, "layout.left"), "Left");
         assert_eq!(tr(Language::Zh, "layout.left"), "左侧");
+    }
+
+    #[test]
+    fn templated_strings_keep_one_placeholder() {
+        for key in ["home.count", "files.drop_title"] {
+            for language in [Language::En, Language::Zh] {
+                assert_eq!(
+                    tr(language, key).matches("{}").count(),
+                    1,
+                    "{language:?} {key}"
+                );
+            }
+        }
     }
 
     /// A placeholder that lost its `{}` would show a byte limit
@@ -794,5 +982,17 @@ mod tests {
             assert_eq!(Theme::from_index(theme.index()), theme);
         }
         assert_eq!(Theme::from_index(9), Theme::System);
+    }
+
+    #[test]
+    fn palette_codes_and_indices_round_trip() {
+        for palette in [Palette::Ember, Palette::Pine] {
+            assert_eq!(Palette::from_code(palette.code()), Some(palette));
+            assert_eq!(Palette::from_index(palette.index()), palette);
+        }
+        assert_eq!(Palette::Ember.index(), 0);
+        assert_eq!(Palette::Pine.index(), 1);
+        assert_eq!(Palette::from_code("brass"), None);
+        assert_eq!(Palette::from_index(5), Palette::Ember);
     }
 }

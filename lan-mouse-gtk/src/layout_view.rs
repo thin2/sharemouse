@@ -1,9 +1,14 @@
 //! Screen-arrangement editor.
 //!
 //! The daemon owns the positions; this widget only renders them and
-//! emits a position when a device card is dropped onto a side. It is a
+//! emits a position when a device screen is dropped onto a side. It is a
 //! plain GTK composition (not a GObject subclass) because it has no
 //! properties that need bindings.
+//!
+//! Drawing rules: this computer is a solid, inverted screen; the device
+//! that currently receives input gets the accent outline and an accent
+//! seam on the shared edge; offline devices are outlines only. Empty
+//! sides are only shown while a screen is being dragged.
 
 use std::{
     cell::{Cell, RefCell},
@@ -22,16 +27,15 @@ pub struct LayoutDevice {
     pub name: String,
     pub position: Position,
     pub current: bool,
+    pub online: bool,
 }
 
 pub struct LayoutView {
     root: gtk::Box,
-    grid: gtk::Grid,
-    title: gtk::Label,
-    hint: gtk::Label,
-    center: gtk::Box,
+    center_who: gtk::Label,
     zones: [gtk::Box; 4],
     zone_labels: [gtk::Label; 4],
+    seams: [gtk::Box; 4],
     devices: RefCell<Vec<LayoutDevice>>,
     language: Cell<Language>,
     on_drop: Rc<dyn Fn(u64, Position)>,
@@ -44,74 +48,144 @@ const ZONE_POSITIONS: [Position; 4] = [
     Position::Bottom,
 ];
 
+/// Wrap a screen in a monitor stand so it reads as a display.
+pub(crate) fn monitor(screen: &impl IsA<gtk::Widget>) -> gtk::Box {
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    column.set_valign(gtk::Align::End);
+    column.set_halign(gtk::Align::Center);
+    column.append(screen);
+    let neck = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    neck.set_size_request(2, 14);
+    neck.set_halign(gtk::Align::Center);
+    neck.add_css_class("monitor-neck");
+    let foot = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    foot.set_size_request(46, 2);
+    foot.set_halign(gtk::Align::Center);
+    foot.add_css_class("monitor-foot");
+    column.append(&neck);
+    column.append(&foot);
+    column
+}
+
+/// The labels inside a screen: side or role at the top, then name and meta.
+pub(crate) fn screen_body(who: &gtk::Label, name: &str, meta: Option<&str>) -> gtk::Box {
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    who.set_xalign(0.0);
+    who.set_vexpand(true);
+    who.set_valign(gtk::Align::Start);
+    who.add_css_class("screen-who");
+    body.append(who);
+    let name = gtk::Label::builder()
+        .label(name)
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .max_width_chars(16)
+        .build();
+    name.add_css_class("screen-name");
+    body.append(&name);
+    if let Some(meta) = meta {
+        let meta = gtk::Label::builder().label(meta).xalign(0.0).build();
+        meta.add_css_class("screen-meta");
+        body.append(&meta);
+    }
+    // The label fills the fixed-size screen; that must not make the
+    // whole page expand around it.
+    body.set_vexpand(false);
+    body
+}
+
 impl LayoutView {
     pub fn new(on_drop: impl Fn(u64, Position) + 'static) -> Rc<Self> {
-        let root = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        root.set_css_classes(&["layout-panel"]);
-
-        let title = gtk::Label::new(None);
-        title.set_xalign(0.0);
-        title.add_css_class("heading");
-        let hint = gtk::Label::new(None);
-        hint.set_xalign(0.0);
-        hint.set_wrap(true);
-        hint.add_css_class("dim-label");
-        hint.add_css_class("caption");
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        root.add_css_class("layout-stage");
 
         let grid = gtk::Grid::new();
-        grid.set_row_spacing(8);
-        grid.set_column_spacing(8);
         grid.set_halign(gtk::Align::Center);
+        grid.set_valign(gtk::Align::End);
 
         let make_zone = |position: Position| {
-            let zone = gtk::Box::new(gtk::Orientation::Vertical, 2);
-            zone.set_size_request(150, 82);
-            zone.set_valign(gtk::Align::Center);
+            // Screens on the same side line up side by side, like monitors on a desk.
+            let orientation = match position {
+                Position::Left | Position::Right => gtk::Orientation::Horizontal,
+                Position::Top | Position::Bottom => gtk::Orientation::Vertical,
+            };
+            let zone = gtk::Box::new(orientation, 16);
+            zone.set_valign(gtk::Align::End);
+            zone.set_halign(gtk::Align::Center);
             zone.add_css_class("layout-zone");
             zone.set_widget_name(position_name(position));
             let label = gtk::Label::new(None);
-            label.add_css_class("caption");
-            label.add_css_class("dim-label");
+            label.add_css_class("layout-slot");
+            label.set_size_request(128, 80);
             zone.append(&label);
             (zone, label)
         };
-
         let (left, left_label) = make_zone(Position::Left);
         let (right, right_label) = make_zone(Position::Right);
         let (top, top_label) = make_zone(Position::Top);
         let (bottom, bottom_label) = make_zone(Position::Bottom);
 
-        let center = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        center.set_size_request(180, 82);
-        center.set_valign(gtk::Align::Center);
-        center.add_css_class("layout-center");
-        let this_device = gtk::Label::new(None);
-        this_device.add_css_class("heading");
-        center.append(&this_device);
-        let hostname_text = hostname::get().ok().and_then(|h| h.into_string().ok());
-        let hostname = gtk::Label::new(hostname_text.as_deref());
-        hostname.add_css_class("caption");
-        hostname.add_css_class("dim-label");
-        center.append(&hostname);
+        let make_seam = |vertical: bool| {
+            let seam = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            seam.add_css_class("seam");
+            if vertical {
+                seam.set_size_request(2, -1);
+                seam.set_halign(gtk::Align::Center);
+                seam.set_margin_start(12);
+                seam.set_margin_end(12);
+                // Skip the rounded corners above and the stand below.
+                seam.set_margin_top(14);
+                seam.set_margin_bottom(30);
+            } else {
+                seam.set_size_request(-1, 2);
+                seam.set_valign(gtk::Align::Center);
+                seam.set_margin_start(24);
+                seam.set_margin_end(24);
+                seam.set_margin_top(10);
+                seam.set_margin_bottom(10);
+            }
+            seam
+        };
+        let seams = [
+            make_seam(true),
+            make_seam(true),
+            make_seam(false),
+            make_seam(false),
+        ];
 
-        grid.attach(&top, 1, 0, 1, 1);
-        grid.attach(&left, 0, 1, 1, 1);
-        grid.attach(&center, 1, 1, 1, 1);
-        grid.attach(&right, 2, 1, 1, 1);
-        grid.attach(&bottom, 1, 2, 1, 1);
+        let center_who = gtk::Label::new(None);
+        let hostname = hostname::get()
+            .ok()
+            .and_then(|h| h.into_string().ok())
+            .unwrap_or_default();
+        let screen = screen_body(&center_who, &hostname, None);
+        screen.add_css_class("screen");
+        screen.add_css_class("self");
+        screen.set_size_request(230, 132);
+        let center = monitor(&screen);
 
-        root.append(&title);
-        root.append(&hint);
+        grid.attach(&top, 2, 0, 1, 1);
+        grid.attach(&seams[2], 2, 1, 1, 1);
+        grid.attach(&left, 0, 2, 1, 1);
+        grid.attach(&seams[0], 1, 2, 1, 1);
+        grid.attach(&center, 2, 2, 1, 1);
+        grid.attach(&seams[1], 3, 2, 1, 1);
+        grid.attach(&right, 4, 2, 1, 1);
+        grid.attach(&seams[3], 2, 3, 1, 1);
+        grid.attach(&bottom, 2, 4, 1, 1);
+
         root.append(&grid);
+        let floor = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        floor.add_css_class("layout-floor");
+        floor.set_size_request(-1, 1);
+        root.append(&floor);
 
         let view = Rc::new(Self {
             root,
-            grid,
-            title,
-            hint,
-            center,
+            center_who,
             zones: [left, right, top, bottom],
             zone_labels: [left_label, right_label, top_label, bottom_label],
+            seams,
             devices: RefCell::new(Vec::new()),
             language: Cell::new(Language::default()),
             on_drop: Rc::new(on_drop),
@@ -133,6 +207,9 @@ impl LayoutView {
     }
 
     pub fn set_devices(&self, devices: Vec<LayoutDevice>) {
+        if *self.devices.borrow() == devices {
+            return;
+        }
         *self.devices.borrow_mut() = devices;
         self.rebuild();
     }
@@ -160,60 +237,92 @@ impl LayoutView {
 
     fn update_labels(&self) {
         let language = self.language.get();
-        self.title.set_text(tr(language, "layout.title"));
-        self.hint.set_text(tr(language, "layout.hint"));
         for (index, label) in self.zone_labels.iter().enumerate() {
             label.set_text(position_label(language, ZONE_POSITIONS[index]));
         }
-        if let Some(label) = self.center.first_child().and_downcast::<gtk::Label>() {
-            label.set_text(tr(language, "layout.this_device"));
-        }
+        self.center_who.set_text(tr(language, "layout.this_device"));
     }
 
     fn rebuild(&self) {
         let devices = self.devices.borrow();
         for (index, zone) in self.zones.iter().enumerate() {
-            // Keep the direction label, replace device chips.
+            // Keep the empty-slot label, replace device screens.
             while let Some(child) = zone.last_child() {
                 if child.eq(&self.zone_labels[index]) {
                     break;
                 }
                 zone.remove(&child);
             }
+            self.seams[index].remove_css_class("lit");
         }
         for device in devices.iter() {
             let Some(index) = ZONE_POSITIONS.iter().position(|p| *p == device.position) else {
                 continue;
             };
-            let chip = self.device_chip(device.handle, &device.name);
+            self.zones[index].append(&self.device_screen(device, index));
             if device.current {
-                chip.add_css_class("suggested-action");
-                chip.set_label(&format!(
-                    "{} · {}",
-                    device.name,
-                    tr(self.language.get(), "status.active")
-                ));
+                self.seams[index].add_css_class("lit");
             }
-            self.zones[index].append(&chip);
         }
-        self.grid.queue_draw();
+        drop(devices);
+        show_zones(&self.zones, &self.zone_labels, false);
     }
 
-    fn device_chip(&self, handle: u64, name: &str) -> gtk::Button {
-        let chip = gtk::Button::with_label(name);
-        chip.add_css_class("layout-chip");
-        chip.set_tooltip_text(Some(name));
-        chip.set_can_focus(true);
+    fn device_screen(&self, device: &LayoutDevice, index: usize) -> gtk::Box {
+        let language = self.language.get();
+        let meta = if device.current {
+            tr(language, "status.active")
+        } else if device.online {
+            tr(language, "status.online")
+        } else {
+            tr(language, "status.offline")
+        };
+        let who = gtk::Label::new(Some(position_label(language, ZONE_POSITIONS[index])));
+        let body = screen_body(&who, &device.name, Some(meta));
+        let screen = gtk::Button::builder()
+            .child(&body)
+            .vexpand(false)
+            .tooltip_text(tr(language, "layout.hint"))
+            .build();
+        screen.add_css_class("screen");
+        screen.set_size_request(176, 110);
+        if device.current {
+            screen.add_css_class("target");
+        } else if !device.online {
+            screen.add_css_class("off");
+        }
 
         let source = gtk::DragSource::builder()
             .actions(gdk::DragAction::MOVE)
             .build();
-        let handle = handle.to_string();
+        let handle = device.handle.to_string();
         source.connect_prepare(move |_, _, _| {
             Some(gdk::ContentProvider::for_value(&handle.to_value()))
         });
-        chip.add_controller(source);
-        chip
+        let zones = self.zones.clone();
+        let labels = self.zone_labels.clone();
+        source.connect_drag_begin(move |_, _| show_zones(&zones, &labels, true));
+        // The daemon's position event rebuilds the layout after a drop;
+        // until then, or after a cancelled drag, collapse the empty sides.
+        let zones = self.zones.clone();
+        let labels = self.zone_labels.clone();
+        source.connect_drag_end(move |_, _, _| show_zones(&zones, &labels, false));
+        screen.add_controller(source);
+        monitor(&screen)
+    }
+}
+
+/// Empty sides are drop slots, shown only while a screen is dragged.
+fn show_zones(zones: &[gtk::Box; 4], labels: &[gtk::Label; 4], dragging: bool) {
+    for (zone, label) in zones.iter().zip(labels) {
+        let occupied = zone.first_child() != zone.last_child();
+        label.set_visible(dragging && !occupied);
+        zone.set_visible(dragging || occupied);
+        if dragging {
+            zone.add_css_class("dragging");
+        } else {
+            zone.remove_css_class("dragging");
+        }
     }
 }
 

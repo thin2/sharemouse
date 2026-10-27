@@ -11,7 +11,7 @@ use lan_mouse_ipc::{ClientHandle, DEFAULT_PORT, FrontendRequestWriter};
 use crate::{
     authorization_window::AuthorizationWindow,
     layout_view::LayoutView,
-    preferences::{Language, Theme, UiPreferences},
+    preferences::{Language, Palette, Theme, UiPreferences},
 };
 
 #[derive(CompositeTemplate, Default)]
@@ -23,16 +23,21 @@ pub struct Window {
     pub message_drafts: RefCell<std::collections::HashMap<String, String>>,
     pub composer_target: RefCell<Option<String>>,
     pub(super) enrollment: RefCell<Option<super::enrollment::Controls>>,
+    pub(super) home: RefCell<Option<super::home::Controls>>,
     #[template_child]
     pub main_menu_button: TemplateChild<gtk::MenuButton>,
     #[template_child]
-    pub primary_row: TemplateChild<ActionRow>,
+    pub where_label: TemplateChild<Label>,
+    #[template_child]
+    pub where_title: TemplateChild<Label>,
+    #[template_child]
+    pub where_hint: TemplateChild<gtk::Box>,
+    #[template_child]
+    pub status_box: TemplateChild<gtk::Box>,
     #[template_child]
     pub clipboard_row: TemplateChild<ActionRow>,
     #[template_child]
     pub start_sharing_button: TemplateChild<Button>,
-    #[template_child]
-    pub current_target_row: TemplateChild<ActionRow>,
     #[template_child]
     pub stop_sharing_button: TemplateChild<Button>,
     #[template_child]
@@ -81,7 +86,11 @@ pub struct Window {
     pub language_row: TemplateChild<ComboRow>,
     #[template_child]
     pub theme_row: TemplateChild<ComboRow>,
+    #[template_child]
+    pub palette_row: TemplateChild<ComboRow>,
     pub autostart_row: RefCell<Option<adw::ActionRow>>,
+    /// Settings card holding the capture/emulation warnings.
+    pub settings_status_card: RefCell<Option<gtk::ListBox>>,
     #[template_child]
     pub general_group: TemplateChild<PreferencesGroup>,
     #[template_child]
@@ -119,7 +128,7 @@ pub struct Window {
     #[template_child]
     pub message_placeholder: TemplateChild<ActionRow>,
     #[template_child]
-    pub hero_subtitle: TemplateChild<Label>,
+    pub header_bar: TemplateChild<adw::HeaderBar>,
     #[template_child]
     pub add_client_content: TemplateChild<adw::ButtonContent>,
     #[template_child]
@@ -148,6 +157,8 @@ pub struct Window {
     pub(super) message_targets: RefCell<Vec<super::conversation::Target>>,
     /// The device currently receiving input, if any.
     pub current_target: RefCell<Option<ClientHandle>>,
+    /// When this device is being controlled, stores the controlling device's info.
+    pub controlling_device: RefCell<Option<(String, std::net::SocketAddr)>>, // (fingerprint, addr)
     pub sharing_state: RefCell<lan_mouse_ipc::SharingState>,
     pub clipboard_status: Cell<lan_mouse_ipc::ClipboardStatus>,
 }
@@ -321,6 +332,14 @@ impl Window {
             self.obj().set_theme_preference(theme);
         }
     }
+
+    #[template_callback]
+    fn handle_palette_changed(&self, _pspec: &glib::ParamSpec) {
+        let palette = Palette::from_index(self.palette_row.selected());
+        if self.preferences.borrow().palette != palette {
+            self.obj().set_palette_preference(palette);
+        }
+    }
 }
 
 impl ObjectImpl for Window {
@@ -337,6 +356,7 @@ impl ObjectImpl for Window {
         obj.setup_authorized();
         obj.setup_layout();
         obj.setup_preferences();
+        obj.setup_home();
         obj.setup_enrollment();
         obj.setup_data_list();
         obj.setup_messages();

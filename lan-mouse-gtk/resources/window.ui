@@ -18,7 +18,26 @@
     <property name="content">
       <object class="AdwToolbarView">
         <child type="top">
-          <object class="AdwHeaderBar">
+          <object class="AdwHeaderBar" id="header_bar">
+            <child type="start">
+              <object class="GtkBox">
+                <property name="spacing">9</property>
+                <style>
+                  <class name="brand"/>
+                </style>
+                <child>
+                  <object class="GtkImage">
+                    <property name="icon-name">de.feschber.LanMouse</property>
+                    <property name="pixel-size">22</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">Sharemouse</property>
+                  </object>
+                </child>
+              </object>
+            </child>
             <child type="end">
               <object class="GtkMenuButton" id="main_menu_button">
                 <property name="icon-name">open-menu-symbolic</property>
@@ -36,48 +55,75 @@
                 <property name="vexpand">true</property>
                 <property name="child">
                   <object class="AdwClamp">
-                    <property name="maximum-size">720</property>
+                    <property name="maximum-size">920</property>
                     <property name="tightening-threshold">0</property>
-                    <property name="margin-start">18</property>
-                    <property name="margin-end">18</property>
-                    <property name="margin-top">18</property>
-                    <property name="margin-bottom">24</property>
+                    <property name="margin-start">28</property>
+                    <property name="margin-end">28</property>
+                    <property name="margin-top">10</property>
+                    <property name="margin-bottom">40</property>
                     <property name="child">
                       <object class="GtkBox">
                         <property name="orientation">vertical</property>
                         <property name="spacing">18</property>
 
                         <child>
-                          <object class="GtkBox" id="hero">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">14</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="icon-name">de.feschber.LanMouse</property>
-                                <property name="pixel-size">56</property>
-                                <property name="valign">center</property>
-                              </object>
-                            </child>
+                          <object class="GtkBox" id="status_box">
+                            <property name="spacing">24</property>
+                            <property name="margin-top">18</property>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">vertical</property>
-                                <property name="valign">center</property>
+                                <property name="hexpand">true</property>
+                                <property name="valign">end</property>
                                 <child>
-                                  <object class="GtkLabel" id="hero_title">
-                                    <property name="label">Sharemouse</property>
+                                  <object class="GtkLabel" id="where_label">
                                     <property name="xalign">0</property>
+                                    <property name="margin-bottom">6</property>
                                     <style>
-                                      <class name="title-1"/>
+                                      <class name="eyebrow"/>
                                     </style>
                                   </object>
                                 </child>
                                 <child>
-                                  <object class="GtkLabel" id="hero_subtitle">
-                                    <property name="label">easily use your mouse and keyboard on multiple computers</property>
+                                  <object class="GtkLabel" id="where_title">
                                     <property name="xalign">0</property>
-                                    <property name="wrap">true</property>
+                                    <property name="ellipsize">end</property>
                                     <style>
-                                      <class name="dim-label"/>
+                                      <class name="where-title"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox" id="where_hint">
+                                    <property name="spacing">5</property>
+                                    <property name="margin-top">12</property>
+                                    <style>
+                                      <class name="where-hint"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="spacing">8</property>
+                                <property name="valign">end</property>
+                                <child>
+                                  <object class="GtkButton" id="stop_sharing_button">
+                                    <property name="label">Stop sharing</property>
+                                    <property name="sensitive">false</property>
+                                    <style>
+                                      <class name="pill"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="start_sharing_button">
+                                    <property name="label">Use this device</property>
+                                    <property name="sensitive">false</property>
+                                    <style>
+                                      <class name="pill"/>
+                                      <class name="suggested-action"/>
                                     </style>
                                   </object>
                                 </child>
@@ -89,43 +135,6 @@
                         <child>
                           <object class="GtkBox" id="layout_container">
                             <property name="orientation">vertical</property>
-                          </object>
-                        </child>
-
-                        <child>
-                          <object class="AdwPreferencesGroup">
-                            <child>
-                              <object class="AdwActionRow" id="primary_row">
-                                <property name="title">Primary device</property>
-                                <property name="subtitle">Waiting for all devices</property>
-                                <child type="suffix">
-                                  <object class="GtkButton" id="start_sharing_button">
-                                    <property name="label">Use this device</property>
-                                    <property name="valign">center</property>
-                                    <property name="sensitive">false</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="AdwActionRow" id="clipboard_row">
-                                <property name="title">Text clipboard</property>
-                                <property name="subtitle">Paused with sharing</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="AdwActionRow" id="current_target_row">
-                                <property name="title">Current control target</property>
-                                <property name="subtitle">This device</property>
-                                <child type="suffix">
-                                  <object class="GtkButton" id="stop_sharing_button">
-                                    <property name="label">Stop sharing</property>
-                                    <property name="valign">center</property>
-                                    <property name="sensitive">false</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
                           </object>
                         </child>
 
@@ -450,6 +459,75 @@
                           <object class="AdwPreferencesGroup" id="transfer_group">
                             <property name="title" translatable="yes">Transfers</property>
                             <child>
+                              <object class="GtkListBox" id="transfer_list">
+                                <property name="selection-mode">none</property>
+                                <child type="placeholder">
+                                  <object class="AdwActionRow" id="transfer_placeholder">
+                                    <property name="title" translatable="yes">no transfers yet</property>
+                                    <property name="subtitle" translatable="yes">drag files onto this window or use "Send files" on a device</property>
+                                  </object>
+                                </child>
+                                <style>
+                                  <class name="boxed-list" />
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwPreferencesGroup" id="preferences_group">
+                            <property name="title" translatable="yes">Preferences</property>
+                            <child>
+                              <object class="AdwComboRow" id="theme_row">
+                                <property name="title">Theme</property>
+                                <signal name="notify::selected" handler="handle_theme_changed" swapped="true"/>
+                                <property name="model">
+                                  <object class="GtkStringList">
+                                    <items>
+                                      <item>System</item>
+                                      <item>Light</item>
+                                      <item>Dark</item>
+                                    </items>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwComboRow" id="palette_row">
+                                <property name="title">Colors</property>
+                                <signal name="notify::selected" handler="handle_palette_changed" swapped="true"/>
+                                <property name="model">
+                                  <object class="GtkStringList">
+                                    <items>
+                                      <item>Ember</item>
+                                      <item>Pine</item>
+                                    </items>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwComboRow" id="language_row">
+                                <property name="title">Language</property>
+                                <signal name="notify::selected" handler="handle_language_changed" swapped="true"/>
+                                <property name="model">
+                                  <object class="GtkStringList">
+                                    <items>
+                                      <item>English</item>
+                                      <item>中文</item>
+                                    </items>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="clipboard_row">
+                                <property name="title">Text clipboard</property>
+                                <property name="subtitle">Paused with sharing</property>
+                              </object>
+                            </child>
+                            <child>
                               <object class="AdwActionRow" id="receive_dir_row">
                                 <property name="title" translatable="yes">Save received files to</property>
                                 <property name="icon-name">folder-download-symbolic</property>
@@ -470,56 +548,6 @@
                                     </style>
                                   </object>
                                 </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkListBox" id="transfer_list">
-                                <property name="selection-mode">none</property>
-                                <property name="margin-top">18</property>
-                                <child type="placeholder">
-                                  <object class="AdwActionRow" id="transfer_placeholder">
-                                    <property name="title" translatable="yes">no transfers yet</property>
-                                    <property name="subtitle" translatable="yes">drag files onto this window or use "Send files" on a device</property>
-                                  </object>
-                                </child>
-                                <style>
-                                  <class name="boxed-list" />
-                                </style>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-
-                        <child>
-                          <object class="AdwPreferencesGroup" id="preferences_group">
-                            <property name="title" translatable="yes">Preferences</property>
-                            <child>
-                              <object class="AdwComboRow" id="language_row">
-                                <property name="title">Language</property>
-                                <signal name="notify::selected" handler="handle_language_changed" swapped="true"/>
-                                <property name="model">
-                                  <object class="GtkStringList">
-                                    <items>
-                                      <item>English</item>
-                                      <item>中文</item>
-                                    </items>
-                                  </object>
-                                </property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="AdwComboRow" id="theme_row">
-                                <property name="title">Theme</property>
-                                <signal name="notify::selected" handler="handle_theme_changed" swapped="true"/>
-                                <property name="model">
-                                  <object class="GtkStringList">
-                                    <items>
-                                      <item>System</item>
-                                      <item>Light</item>
-                                      <item>Dark</item>
-                                    </items>
-                                  </object>
-                                </property>
                               </object>
                             </child>
                           </object>

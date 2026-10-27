@@ -1,5 +1,6 @@
 mod conversation;
 mod enrollment;
+mod home;
 mod image_messages;
 mod imp;
 
@@ -25,7 +26,7 @@ use crate::{
     key_row::KeyRow,
     layout_view::{LayoutDevice, LayoutView},
     message_log::{Direction, Message},
-    preferences::{Language, Theme, UiPreferences, tr},
+    preferences::{Language, Palette, Theme, UiPreferences, tr},
 };
 
 /// Accepted message size, mirroring the service's limit so the UI can
@@ -450,7 +451,20 @@ impl Window {
             .language_row
             .set_selected(preferences.language.index());
         self.imp().theme_row.set_selected(preferences.theme.index());
+        self.imp()
+            .palette_row
+            .set_selected(preferences.palette.index());
         self.set_theme(preferences.theme);
+        // The palette has separate light and dark colors, so follow the
+        // effective scheme, including system changes while running.
+        adw::StyleManager::default().connect_dark_notify(clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| {
+                let palette = window.imp().preferences.borrow().palette;
+                crate::apply_palette(palette);
+            }
+        ));
         let row = adw::ActionRow::new();
         let toggle = gtk::Switch::builder()
             .valign(gtk::Align::Center)
@@ -516,6 +530,19 @@ impl Window {
         }
     }
 
+    pub(super) fn set_palette_preference(&self, palette: Palette) {
+        let mut preferences = self.imp().preferences.borrow().to_owned();
+        if preferences.palette == palette {
+            return;
+        }
+        preferences.palette = palette;
+        self.imp().preferences.replace(preferences);
+        crate::apply_palette(palette);
+        if let Err(e) = preferences.save() {
+            log::warn!("failed to save UI preferences: {e}");
+        }
+    }
+
     pub(super) fn set_theme(&self, theme: Theme) {
         let style_manager = adw::StyleManager::default();
         match theme {
@@ -529,6 +556,8 @@ impl Window {
                 style_manager.set_color_scheme(adw::ColorScheme::ForceDark);
             }
         }
+        let palette = self.imp().preferences.borrow().palette;
+        crate::apply_palette(palette);
     }
 
     fn apply_language(&self, language: Language) {
@@ -566,6 +595,11 @@ impl Window {
             .set_title(tr(language, "general.data_port"));
         imp.language_row.set_title(tr(language, "pref.language"));
         imp.theme_row.set_title(tr(language, "pref.theme"));
+        imp.palette_row.set_title(tr(language, "pref.palette"));
+        update_choice_labels(
+            &imp.palette_row,
+            &[tr(language, "palette.ember"), tr(language, "palette.pine")],
+        );
         imp.preferences_group
             .set_title(tr(language, "group.preferences"));
         imp.data_group.set_title(tr(language, "group.data"));
@@ -598,7 +632,6 @@ impl Window {
             .set_title(tr(language, "placeholder.no_data"));
         imp.data_placeholder
             .set_subtitle(tr(language, "placeholder.no_data_subtitle"));
-        imp.hero_subtitle.set_label(tr(language, "app.subtitle"));
         imp.add_client_content.set_label(tr(language, "button.add"));
         imp.authorize_content
             .set_label(tr(language, "button.authorize"));
@@ -617,6 +650,11 @@ impl Window {
         if let Some(layout) = imp.layout_view.borrow().as_ref() {
             layout.set_language(language);
         }
+        imp.connections_group
+            .set_title(tr(language, "settings.manual"));
+        imp.connections_group
+            .set_description(Some(tr(language, "settings.manual_note")));
+        self.apply_home_language(language);
         for row in self.client_rows() {
             row.apply_language(language);
         }
@@ -648,12 +686,15 @@ impl Window {
                     name: object.display_name(),
                     position,
                     current: data.is_current_target,
+                    online: data.alive,
                 }
             })
             .collect();
         if let Some(layout) = self.imp().layout_view.borrow().as_ref() {
             layout.set_devices(devices);
         }
+        self.refresh_home_devices();
+        self.update_conversation_navigation();
     }
 
     fn setup_layout(&self) {
@@ -1830,7 +1871,6 @@ impl Window {
             let anything_off = !capture || !emulation;
             self.imp().emulation_status_row.set_visible(false);
             self.imp().capture_status_row.set_visible(anything_off);
-            self.imp().capture_emulation_group.set_visible(anything_off);
 
             if anything_off {
                 self.update_macos_warning_row_text();
@@ -1841,9 +1881,9 @@ impl Window {
         {
             self.imp().capture_status_row.set_visible(!capture);
             self.imp().emulation_status_row.set_visible(!emulation);
-            self.imp()
-                .capture_emulation_group
-                .set_visible(!capture || !emulation);
+        }
+        if let Some(card) = self.imp().settings_status_card.borrow().as_ref() {
+            card.set_visible(!capture || !emulation);
         }
     }
 
@@ -1930,6 +1970,20 @@ impl Window {
         self.refresh_layout();
     }
 
+    pub(super) fn set_controlling_device(&self, device: Option<(String, std::net::SocketAddr)>) {
+        self.imp().controlling_device.replace(device);
+        self.refresh_layout();
+    }
+
+    pub(super) fn clear_controlling_device(&self, addr: std::net::SocketAddr) {
+        let mut controlling = self.imp().controlling_device.borrow_mut();
+        if controlling.as_ref().map(|(_, a)| *a) == Some(addr) {
+            *controlling = None;
+            drop(controlling);
+            self.refresh_layout();
+        }
+    }
+
     fn refresh_sharing_status(&self) {
         self.set_clipboard_status(self.imp().clipboard_status.get());
         use lan_mouse_ipc::SharingPhase;
@@ -1951,50 +2005,76 @@ impl Window {
                 .or_else(|| state.primary.clone())
                 .unwrap_or_default()
         };
-        let subtitle = if state.phase == SharingPhase::Running {
+        let setup = self.needs_connection_setup();
+        let running = state.phase == SharingPhase::Running;
+        
+        // Check if this device is being controlled by another device
+        let controlling_device = self.imp().controlling_device.borrow();
+        let controlled_by = controlling_device.as_ref().map(|(_, addr)| addr.to_string());
+        
+        let current = (*self.imp().current_target.borrow())
+            .and_then(|h| self.client_object_for_handle(h))
+            .map(|c| c.display_name());
+        let imp = self.imp();
+        
+        // The headline says where the keyboard and mouse are now; the
+        // phase explains anything that is not plain "running".
+        // Priority: controlled_by > current_target > default state
+        match (&controlled_by, &current, running) {
+            (Some(addr), _, _) => {
+                // This device is being controlled
+                imp.where_label.set_text(tr(language, "home.controlled"));
+                imp.where_title.set_text(addr);
+                imp.where_title.remove_css_class("home");
+            }
+            (None, Some(name), _) => {
+                // This device is controlling another
+                imp.where_label.set_text(tr(language, "home.controlling"));
+                imp.where_title.set_text(name);
+                imp.where_title.remove_css_class("home");
+            }
+            (None, None, true) => {
+                // Running, not controlling or controlled
+                imp.where_label.set_text(tr(language, "home.here"));
+                imp.where_title.set_text(&primary_name);
+                imp.where_title.add_css_class("home");
+            }
+            (None, None, false) => {
+                // Paused
+                imp.where_label.set_text(tr(language, "home.paused"));
+                imp.where_title.set_text(tr(language, "home.this_device"));
+                imp.where_title.add_css_class("home");
+            }
+        }
+        let detail = if running {
             format!("{}: {}", tr(language, phase), primary_name)
         } else {
             tr(language, phase).to_owned()
         };
-        self.imp()
-            .primary_row
-            .set_title(tr(language, "sharing.primary"));
-        self.imp()
-            .primary_row
-            .set_subtitle(&glib::markup_escape_text(
-                if self.needs_connection_setup() {
-                    self.connection_setup_hint()
-                } else {
-                    &subtitle
-                },
-            ));
-        self.imp()
-            .start_sharing_button
-            .set_label(if self.needs_connection_setup() {
-                self.connection_setup_button()
-            } else {
-                tr(language, "sharing.start")
-            });
-        self.imp()
-            .start_sharing_button
-            .set_sensitive(self.needs_connection_setup() || state.phase == SharingPhase::Stopped);
-        let current = *self.imp().current_target.borrow();
-        let name = current
-            .and_then(|h| self.client_object_for_handle(h))
-            .map(|c| c.display_name())
-            .unwrap_or_else(|| tr(language, "layout.this_device").to_owned());
-        self.imp()
-            .current_target_row
-            .set_title(tr(language, "sharing.current_target"));
-        self.imp()
-            .current_target_row
-            .set_subtitle(&glib::markup_escape_text(&name));
-        self.imp()
-            .stop_sharing_button
+        imp.where_title.set_tooltip_text(Some(&detail));
+        imp.where_hint.set_visible(current.is_some());
+        imp.where_label.set_tooltip_text(Some(if setup {
+            self.connection_setup_hint()
+        } else {
+            &detail
+        }));
+        imp.start_sharing_button.set_label(if setup {
+            self.connection_setup_button()
+        } else {
+            tr(language, "sharing.start")
+        });
+        imp.start_sharing_button.set_tooltip_text(Some(&detail));
+        // Show only the action that applies to the current phase.
+        imp.start_sharing_button
+            .set_sensitive(setup || state.phase == SharingPhase::Stopped);
+        imp.start_sharing_button
+            .set_visible(setup || state.phase != SharingPhase::Running);
+        imp.stop_sharing_button
             .set_label(tr(language, "sharing.stop"));
-        self.imp()
-            .stop_sharing_button
+        imp.stop_sharing_button
             .set_sensitive(state.phase != SharingPhase::Stopped);
+        imp.stop_sharing_button
+            .set_visible(!setup && state.phase != SharingPhase::Stopped);
     }
 
     pub(super) fn set_sharing_state(&self, state: lan_mouse_ipc::SharingState) {

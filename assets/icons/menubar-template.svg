@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="80 280 864 464">
+  <!-- Menu bar template: the app icon's glyph without its background.
+       macOS tints it, so only the alpha channel matters. -->
+  <rect x="88" y="301" width="469" height="422" rx="46" fill="#000"/>
+  <line x1="498" y1="522" x2="600" y2="522" stroke="#000" stroke-width="46" stroke-linecap="round"/>
+  <rect x="601" y="382" width="314" height="281" rx="34" fill="none" stroke="#000" stroke-width="46"/>
+</svg>

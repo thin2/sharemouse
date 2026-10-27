@@ -3,7 +3,7 @@
 // Included libtest helpers are not run by this main-thread harness.
 #![allow(dead_code, unused_imports)]
 include!("../src/lib.rs");
-use adw::prelude::MessageDialogExt;
+use adw::prelude::{ActionRowExt, MessageDialogExt, PreferencesRowExt};
 
 fn main() {
     if std::env::var_os("LAN_MOUSE_RUN_UI_TEST").is_none() {
@@ -65,6 +65,11 @@ fn run_ui(app: &adw::Application) {
         } else {
             preferences::Theme::Light
         },
+        palette: if std::env::var("LAN_MOUSE_UI_PALETTE").as_deref() == Ok("pine") {
+            preferences::Palette::Pine
+        } else {
+            preferences::Palette::Ember
+        },
     }
     .save()
     .unwrap();
@@ -79,12 +84,14 @@ fn run_ui(app: &adw::Application) {
         imp.start_sharing_button.emit_clicked();
         #[cfg(unix)]
         assert!(fixture_request(&_sink).contains("HostGroup"));
+        assert!(window.add_device_dialog().unwrap().is_visible());
         window.update_enrollment(vec![], "idle".into());
         window.update_discovered_hosts(vec![lan_mouse_ipc::DiscoveredHost {
             name: "Desk & <Lab>".into(),
             address: "192.0.2.20".into(),
         }]);
-        let nearby = named_widget(window.upcast_ref(), "nearby-hosts")
+        let dialog = window.add_device_dialog().unwrap();
+        let nearby = named_widget(dialog.upcast_ref(), "nearby-hosts")
             .unwrap()
             .downcast::<gtk::ListBox>()
             .unwrap();
@@ -109,12 +116,23 @@ fn run_ui(app: &adw::Application) {
         assert!(nearby.first_child().is_none() && !nearby.is_visible());
         window.update_enrollment(vec!["192.0.2.10".into()], "hosting".into());
         assert!(!nearby.parent().unwrap().is_visible());
-        let address = named_widget(window.upcast_ref(), "joining-address")
+        let address = named_widget(dialog.upcast_ref(), "joining-address")
             .unwrap()
             .downcast::<gtk::Label>()
             .unwrap();
         assert_eq!(address.text(), "192.0.2.10");
         assert!(address.is_visible() && address.parent().unwrap().is_visible());
+        if let Some(path) = std::env::var_os("LAN_MOUSE_UI_SCREENSHOT") {
+            let path = std::path::PathBuf::from(path);
+            save_png(
+                dialog.upcast_ref(),
+                path.with_file_name(format!(
+                    "{}-dialog.png",
+                    path.file_stem().unwrap().to_string_lossy()
+                )),
+            );
+        }
+        dialog.close();
         let stack = imp
             .toast_overlay
             .child()
@@ -453,4 +471,23 @@ fn fixture_connection() -> (
     std::net::TcpStream,
 ) {
     panic!("This isolated native harness currently supports Unix sockets only");
+}
+
+fn save_png(widget: &gtk::Widget, path: std::path::PathBuf) {
+    let snapshot = gtk::Snapshot::new();
+    gtk::WidgetPaintable::new(Some(widget)).snapshot(
+        &snapshot,
+        widget.width() as f64,
+        widget.height() as f64,
+    );
+    if let Some(node) = snapshot.to_node() {
+        widget
+            .native()
+            .unwrap()
+            .renderer()
+            .unwrap()
+            .render_texture(node, None)
+            .save_to_png(path)
+            .unwrap();
+    }
 }
